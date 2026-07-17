@@ -56,6 +56,14 @@ on:
         required: false
         type: boolean
         default: false
+      always_on_top:
+        description: "Always keep window on top"
+        required: false
+        type: boolean
+        default: false
+      inject_url:
+        description: "URL of JS/CSS file to inject into the page"
+        required: false
       targets:
         description: "Package formats (comma-separated: deb,appimage,rpm,zst)"
         required: false
@@ -131,6 +139,12 @@ jobs:
           if [ "${{ inputs.multi_arch }}" == "true" ]; then
             ARGS+=("--multi-arch")
           fi
+          if [ "${{ inputs.always_on_top }}" == "true" ]; then
+            ARGS+=("--always-on-top")
+          fi
+          if [ -n "${{ inputs.inject_url }}" ]; then
+            ARGS+=("--inject" "${{ inputs.inject_url }}")
+          fi
           if [ -n "${{ inputs.targets }}" ] && [ "${{ runner.os }}" == "Linux" ]; then
             ARGS+=("--targets" "${{ inputs.targets }}")
           fi
@@ -168,6 +182,12 @@ jobs:
           }
           if ("${{ inputs.hide_title_bar }}" -eq "true") {
             $args += "--hide-title-bar"
+          }
+          if ("${{ inputs.always_on_top }}" -eq "true") {
+            $args += "--always-on-top"
+          }
+          if ("${{ inputs.inject_url }}" -ne "") {
+            $args += "--inject", "${{ inputs.inject_url }}"
           }
           if ("${{ inputs.keep_binary }}" -eq "true") {
             $args += "--keep-binary"
