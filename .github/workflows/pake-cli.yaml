@@ -1,9 +1,7 @@
 name: Build App With Pake CLI
-
 env:
   NODE_VERSION: "22"
   PNPM_VERSION: "10.26.2"
-
 on:
   workflow_dispatch:
     inputs:
@@ -62,35 +60,33 @@ on:
         description: "Package formats (comma-separated: deb,appimage,rpm,zst)"
         required: false
         default: "deb"
-
+      keep_binary:
+        description: "Keep raw executable (.exe on Windows) alongside installer"
+        required: false
+        type: boolean
+        default: false
 jobs:
   build:
     name: ${{ inputs.platform }}
     runs-on: ${{ inputs.platform }}
     strategy:
       fail-fast: false
-
     steps:
       - name: Checkout repository
         uses: actions/checkout@v6
-
       - name: Install Rust
         uses: dtolnay/rust-toolchain@stable
         with:
           toolchain: stable
-
       - name: Setup Node.js Environment
         uses: ./.github/actions/setup-env
         with:
           mode: build
-
       - name: Build CLI
         run: pnpm run cli:build
-
       - name: Setup mold linker
         if: runner.os == 'Linux'
         uses: rui314/setup-mold@v1
-
       - name: Rust cache restore
         uses: actions/cache/restore@v4.2.0
         id: cache_store
@@ -102,101 +98,83 @@ jobs:
             ~/.cargo/git/db/
             src-tauri/target/
           key: ${{ runner.os }}-cargo-pake-${{ hashFiles('**/Cargo.lock') }}
-
       - name: Build App (Linux/macOS)
         if: runner.os != 'Windows'
         timeout-minutes: 25
         shell: bash
         run: |
           ARGS=("${{ inputs.url }}" "--name" "${{ inputs.name }}")
-
           if [ -n "${{ inputs.icon }}" ]; then
             ARGS+=("--icon" "${{ inputs.icon }}")
           fi
-
           if [ -n "${{ inputs.width }}" ]; then
             ARGS+=("--width" "${{ inputs.width }}")
           fi
-
           if [ -n "${{ inputs.height }}" ]; then
             ARGS+=("--height" "${{ inputs.height }}")
           fi
-
           if [ -n "${{ inputs.min_width }}" ]; then
             ARGS+=("--min-width" "${{ inputs.min_width }}")
           fi
-
           if [ -n "${{ inputs.min_height }}" ]; then
             ARGS+=("--min-height" "${{ inputs.min_height }}")
           fi
-
           if [ -n "${{ inputs.app_version }}" ]; then
             ARGS+=("--app-version" "${{ inputs.app_version }}")
           fi
-
           if [ "${{ inputs.fullscreen }}" == "true" ]; then
             ARGS+=("--fullscreen")
           fi
-
           if [ "${{ inputs.hide_title_bar }}" == "true" ]; then
             ARGS+=("--hide-title-bar")
           fi
-
           if [ "${{ inputs.multi_arch }}" == "true" ]; then
             ARGS+=("--multi-arch")
           fi
-
           if [ -n "${{ inputs.targets }}" ] && [ "${{ runner.os }}" == "Linux" ]; then
             ARGS+=("--targets" "${{ inputs.targets }}")
           fi
-
+          if [ "${{ inputs.keep_binary }}" == "true" ]; then
+            ARGS+=("--keep-binary")
+          fi
           echo "Running: node dist/cli.js ${ARGS[@]}"
           node dist/cli.js "${ARGS[@]}"
-
       - name: Build App (Windows)
         if: runner.os == 'Windows'
         timeout-minutes: 25
         shell: pwsh
         run: |
           $args = "${{ inputs.url }}", "--name", "${{ inputs.name }}"
-
           if ("${{ inputs.icon }}" -ne "") {
             $args += "--icon", "${{ inputs.icon }}"
           }
-
           if ("${{ inputs.width }}" -ne "") {
             $args += "--width", "${{ inputs.width }}"
           }
-
           if ("${{ inputs.height }}" -ne "") {
             $args += "--height", "${{ inputs.height }}"
           }
-
           if ("${{ inputs.min_width }}" -ne "") {
             $args += "--min-width", "${{ inputs.min_width }}"
           }
-
           if ("${{ inputs.min_height }}" -ne "") {
             $args += "--min-height", "${{ inputs.min_height }}"
           }
-
           if ("${{ inputs.app_version }}" -ne "") {
             $args += "--app-version", "${{ inputs.app_version }}"
           }
-
           if ("${{ inputs.fullscreen }}" -eq "true") {
             $args += "--fullscreen"
           }
-
           if ("${{ inputs.hide_title_bar }}" -eq "true") {
             $args += "--hide-title-bar"
           }
-
+          if ("${{ inputs.keep_binary }}" -eq "true") {
+            $args += "--keep-binary"
+          }
           Write-Host "Running: node dist/cli.js $($args -join ' ')"
           node dist/cli.js $args
-
           git checkout -- src-tauri/Cargo.lock
-
       - name: Upload DMG (macOS)
         if: runner.os == 'macOS'
         uses: actions/upload-artifact@v6
@@ -204,7 +182,6 @@ jobs:
           name: ${{ inputs.name }}-macOS
           path: ${{ inputs.name }}.dmg
           retention-days: 3
-
       - name: Upload DEB (Linux)
         if: runner.os == 'Linux'
         uses: actions/upload-artifact@v6
@@ -213,7 +190,6 @@ jobs:
           path: ${{ inputs.name }}.deb
           retention-days: 3
           if-no-files-found: ignore
-
       - name: Upload AppImage (Linux)
         if: runner.os == 'Linux'
         uses: actions/upload-artifact@v6
@@ -222,7 +198,6 @@ jobs:
           path: ${{ inputs.name }}.AppImage
           retention-days: 3
           if-no-files-found: ignore
-
       - name: Upload RPM (Linux)
         if: runner.os == 'Linux'
         uses: actions/upload-artifact@v6
@@ -231,7 +206,6 @@ jobs:
           path: ${{ inputs.name }}.rpm
           retention-days: 3
           if-no-files-found: ignore
-
       - name: Upload ZST (Linux)
         if: runner.os == 'Linux'
         uses: actions/upload-artifact@v6
@@ -240,7 +214,6 @@ jobs:
           path: ${{ inputs.name }}-*.pkg.tar.zst
           retention-days: 3
           if-no-files-found: ignore
-
       - name: Upload MSI (Windows)
         if: runner.os == 'Windows'
         uses: actions/upload-artifact@v6
@@ -248,7 +221,14 @@ jobs:
           name: ${{ inputs.name }}-Windows
           path: ${{ inputs.name }}.msi
           retention-days: 3
-
+      - name: Upload Binary EXE (Windows)
+        if: runner.os == 'Windows'
+        uses: actions/upload-artifact@v6
+        with:
+          name: ${{ inputs.name }}-Windows-exe
+          path: ${{ inputs.name }}.exe
+          retention-days: 3
+          if-no-files-found: ignore
       - name: Rust cache store
         uses: actions/cache/save@v4.2.0
         if: steps.cache_store.outputs.cache-hit != 'true'
